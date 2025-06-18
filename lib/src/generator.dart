@@ -188,10 +188,16 @@ class Generator {
     for (int y = 0; y < heightPx; y++) {
       for (int x = 0; x < widthPx; x++) {
         final index = (y * widthPx + x) * 4;
-        oneChannelBytes.add(buffer[index]); // red channel (grayscale)
+
+        // 🔐 Seguridad: evita acceso fuera de rango
+        if (index < buffer.length) {
+          oneChannelBytes.add(buffer[index]); // red channel (grayscale)
+        } else {
+          oneChannelBytes.add(0); // fallback por seguridad
+        }
       }
 
-      // Padding at end of each row if necessary
+      // Añade píxeles vacíos si la línea no es múltiplo de 8
       if (missingPx > 0) {
         oneChannelBytes.addAll(List<int>.filled(missingPx, 0));
       }
