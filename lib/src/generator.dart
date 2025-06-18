@@ -187,10 +187,10 @@ class Generator {
       final missingPx = targetWidth - widthPx;
       final extra = Uint8List(missingPx);
 
-      oneChannelBytes = List<int>.filled(heightPx * targetWidth, 0);
+      oneChannelBytes =
+          List<int>.filled(heightPx * targetWidth, 0, growable: true);
 
       for (int i = 0; i < heightPx; i++) {
-
         final pos =
             (i * widthPx) + i * missingPx; // Corrected position calculation
         oneChannelBytes.insertAll(pos, extra);
