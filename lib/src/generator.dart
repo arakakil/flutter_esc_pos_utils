@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data' show Uint8List;
-
-import 'package:flutter_esc_pos_utils/flutter_esc_pos_utils.dart';
-import 'package:gbk_codec/gbk_codec.dart';
 import 'package:hex/hex.dart';
 import 'package:image/image.dart';
-
+import 'package:gbk_codec/gbk_codec.dart';
+import 'package:flutter_esc_pos_utils/flutter_esc_pos_utils.dart';
 import 'commands.dart';
 
 class Generator {
@@ -82,22 +80,19 @@ class Generator {
     final List<bool> isLexemeChinese = [];
     int start = 0;
     int end = 0;
-    bool curLexemeChinese = _isChinese(text.isNotEmpty ? text[0] : ' ');
-    if (text.isNotEmpty) {
-      for (var i = 1; i < text.length; ++i) {
-        if (curLexemeChinese == _isChinese(text[i])) {
-          end += 1;
-        } else {
-          lexemes.add(text.substring(start, end + 1));
-          isLexemeChinese.add(curLexemeChinese);
-          start = i;
-          end = i;
-          curLexemeChinese = !curLexemeChinese;
-        }
+    bool curLexemeChinese = _isChinese(text[0]);
+    for (var i = 1; i < text.length; ++i) {
+      if (curLexemeChinese == _isChinese(text[i])) {
+        end += 1;
+      } else {
+        lexemes.add(text.substring(start, end + 1));
+        isLexemeChinese.add(curLexemeChinese);
+        start = i;
+        end = i;
+        curLexemeChinese = !curLexemeChinese;
       }
-
-      lexemes.add(text.substring(start, end + 1));
     }
+    lexemes.add(text.substring(start, end + 1));
     isLexemeChinese.add(curLexemeChinese);
 
     return <dynamic>[lexemes, isLexemeChinese];
@@ -178,36 +173,22 @@ class Generator {
     invert(image);
 
     // R/G/B channels are same -> keep only one channel
-
-    List<int> oneChannelBytes = [];
+    final List<int> oneChannelBytes = [];
     final List<int> buffer = image.getBytes(order: ChannelOrder.rgba);
     for (int i = 0; i < buffer.length; i += 4) {
       oneChannelBytes.add(buffer[i]);
-      final targetWidth = (widthPx + 8) - (widthPx % 8);
-      final missingPx = targetWidth - widthPx;
-      final extra = Uint8List(missingPx);
-
-      oneChannelBytes =
-          List<int>.filled(heightPx * targetWidth, 0, growable: true);
-
-      for (int i = 0; i < heightPx; i++) {
-        final pos =
-            (i * widthPx) + i * missingPx; // Corrected position calculation
-        oneChannelBytes.insertAll(pos, extra);
-      }
     }
 
     // Add some empty pixels at the end of each line (to make the width divisible by 8)
-    // if (widthPx % 8 != 0) {
-
-    //   final targetWidth = (widthPx + 8) - (widthPx % 8);
-    //   final missingPx = targetWidth - widthPx;
-    //   final extra = Uint8List(missingPx);
-    //   for (int i = 0; i < heightPx; i++) {
-    //     final pos = (i * widthPx + widthPx) + i * missingPx;
-    //     oneChannelBytes.insertAll(pos, extra);
-    //   }
-    // }
+    if (widthPx % 8 != 0) {
+      final targetWidth = (widthPx + 8) - (widthPx % 8);
+      final missingPx = targetWidth - widthPx;
+      final extra = Uint8List(missingPx);
+      for (int i = 0; i < heightPx; i++) {
+        final pos = (i * widthPx + widthPx) + i * missingPx;
+        oneChannelBytes.insertAll(pos, extra);
+      }
+    }
 
     // Pack bits into bytes
     return _packBitsIntoBytes(oneChannelBytes);
