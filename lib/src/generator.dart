@@ -177,38 +177,26 @@ class Generator {
     grayscale(image);
     invert(image);
 
-    // R/G/B channels are same -> keep only one channel
-
-    List<int> oneChannelBytes = [];
     final List<int> buffer = image.getBytes(order: ChannelOrder.rgba);
-    for (int i = 0; i < buffer.length; i += 4) {
-      oneChannelBytes.add(buffer[i]);
-    }
 
-    // Add some empty pixels at the end of each line (to make the width divisible by 8)
-    if (widthPx % 8 != 0) {
-      final targetWidth = (widthPx + 8) - (widthPx % 8);
-      final missingPx = targetWidth - widthPx;
-      final extra = Uint8List(missingPx);
-      for (int i = 0; i < heightPx; i++) {
-        final pos = (i * widthPx + widthPx) + i * missingPx;
-        oneChannelBytes.insertAll(pos, extra);
+    final bool needsPadding = widthPx % 8 != 0;
+    final int targetWidth = needsPadding ? ((widthPx + 7) & ~7) : widthPx;
+    final int missingPx = targetWidth - widthPx;
+
+    final List<int> oneChannelBytes = [];
+
+    for (int y = 0; y < heightPx; y++) {
+      for (int x = 0; x < widthPx; x++) {
+        final index = (y * widthPx + x) * 4;
+        oneChannelBytes.add(buffer[index]); // red channel (grayscale)
+      }
+
+      // Padding at end of each row if necessary
+      if (missingPx > 0) {
+        oneChannelBytes.addAll(List<int>.filled(missingPx, 0));
       }
     }
 
-    // Add some empty pixels at the end of each line (to make the width divisible by 8)
-    // if (widthPx % 8 != 0) {
-
-    //   final targetWidth = (widthPx + 8) - (widthPx % 8);
-    //   final missingPx = targetWidth - widthPx;
-    //   final extra = Uint8List(missingPx);
-    //   for (int i = 0; i < heightPx; i++) {
-    //     final pos = (i * widthPx + widthPx) + i * missingPx;
-    //     oneChannelBytes.insertAll(pos, extra);
-    //   }
-    // }
-
-    // Pack bits into bytes
     return _packBitsIntoBytes(oneChannelBytes);
   }
 
