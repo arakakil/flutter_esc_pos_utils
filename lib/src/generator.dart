@@ -168,63 +168,65 @@ class Generator {
 
   /// Image rasterization
   List<int> _toRasterFormat(Image imgSrc) {
-    final Image image = Image.from(imgSrc); // copia
+    // Copia de la imagen para no modificar la original
+    final Image image = Image.from(imgSrc);
     final int widthPx = image.width;
     final int heightPx = image.height;
 
+    // Convertir a escala de grises e invertir
     grayscale(image);
     invert(image);
 
-    // Tomar solo el canal rojo (los tres son iguales tras grayscale)
+    // Extraer un solo canal (R) tras grayscale
     final List<int> oneChannelBytes = [];
     final List<int> buffer = image.getBytes(order: ChannelOrder.rgba);
     for (int i = 0; i < buffer.length; i += 4) {
-      oneChannelBytes.add(buffer[i]);
+      oneChannelBytes.add(buffer[i]); // solo canal rojo
     }
 
-    // Ajustar el ancho a múltiplos de 8 (requerido por ESC/POS)
-    List<int> paddedBytes = [];
-    final targetWidth = (widthPx % 8 == 0)
-        ? widthPx
-        : (widthPx + 8) - (widthPx % 8); // siguiente múltiplo de 8
-    final missingPx = targetWidth - widthPx;
-    final extra = List<int>.filled(missingPx, 0);
+    // Ajustar ancho a múltiplo de 8
+    final int targetWidth =
+        (widthPx % 8 == 0) ? widthPx : (widthPx + 8) - (widthPx % 8);
+    final int missingPx = targetWidth - widthPx;
+
+    final List<int> paddedBytes = [];
+    final List<int> extra = List<int>.filled(missingPx, 0);
 
     for (int y = 0; y < heightPx; y++) {
       final start = y * widthPx;
       final end = start + widthPx;
-      paddedBytes.addAll(oneChannelBytes.sublist(start, end)); // línea original
-      if (missingPx > 0) paddedBytes.addAll(extra); // relleno al final
+
+      // Evitar sublist fuera de rango
+      final safeEnd =
+          (end <= oneChannelBytes.length) ? end : oneChannelBytes.length;
+
+      paddedBytes.addAll(oneChannelBytes.sublist(start, safeEnd));
+
+      // Agregar padding si es necesario
+      if (missingPx > 0) paddedBytes.addAll(extra);
     }
 
-    // Empaquetar bits en bytes
+    // Empaquetar los bits en bytes para la impresora
     return _packBitsIntoBytes(paddedBytes);
   }
 
+// Función para convertir 8 píxeles en un byte
   List<int> _packBitsIntoBytes(List<int> bytes) {
-    const pxPerLine = 8;
-    final List<int> res = [];
-    const threshold = 127;
+    const int pxPerByte = 8;
+    const int threshold = 127;
+    final List<int> res = <int>[];
 
-    // Procesar de a 8 píxeles por byte
-    for (int i = 0; i + pxPerLine <= bytes.length; i += pxPerLine) {
+    for (int i = 0; i < bytes.length; i += pxPerByte) {
       int newVal = 0;
-      for (int j = 0; j < pxPerLine; j++) {
-        newVal = _transformUint32Bool(
-          newVal,
-          pxPerLine - j,
-          bytes[i + j] > threshold,
-        );
+      for (int j = 0; j < pxPerByte; j++) {
+        final int idx = i + j;
+        final bool bit = (idx < bytes.length) && (bytes[idx] > threshold);
+        newVal |= (bit ? 1 : 0) << (7 - j);
       }
-      res.add(newVal ~/ 2);
+      res.add(newVal);
     }
 
     return res;
-  }
-
-  int _transformUint32Bool(int uint32, int shift, bool newValue) {
-    return ((0xFFFFFFFF ^ (0x1 << shift)) & uint32) |
-        ((newValue ? 1 : 0) << shift);
   }
 
   // ************************ (end) Internal helpers  ************************
