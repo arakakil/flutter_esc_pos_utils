@@ -168,42 +168,46 @@ class Generator {
 
   /// Image rasterization
   List<int> _toRasterFormat(Image imgSrc) {
-    final Image image = Image.from(imgSrc); // make a copy
+    final Image image = Image.from(imgSrc); // copia
     final int widthPx = image.width;
     final int heightPx = image.height;
 
     grayscale(image);
     invert(image);
 
-    // R/G/B channels are same -> keep only one channel
-
-    List<int> oneChannelBytes = [];
+    // Tomar solo el canal rojo (los tres son iguales tras grayscale)
+    final List<int> oneChannelBytes = [];
     final List<int> buffer = image.getBytes(order: ChannelOrder.rgba);
     for (int i = 0; i < buffer.length; i += 4) {
       oneChannelBytes.add(buffer[i]);
-      final targetWidth = (widthPx + 8) - (widthPx % 8);
-      final missingPx = targetWidth - widthPx;
-      final extra = Uint8List(missingPx);
-
-      oneChannelBytes = List<int>.generate(heightPx * targetWidth, (_) => 0);
-
-      for (int i = 0; i < heightPx; i++) {
-        final pos =
-            (i * widthPx) + i * missingPx; // Corrected position calculation
-        oneChannelBytes.insertAll(pos, extra);
-      }
     }
 
-    // Pack bits into bytes
-    return _packBitsIntoBytes(oneChannelBytes);
+    // Ajustar el ancho a múltiplos de 8 (requerido por ESC/POS)
+    List<int> paddedBytes = [];
+    final targetWidth = (widthPx % 8 == 0)
+        ? widthPx
+        : (widthPx + 8) - (widthPx % 8); // siguiente múltiplo de 8
+    final missingPx = targetWidth - widthPx;
+    final extra = List<int>.filled(missingPx, 0);
+
+    for (int y = 0; y < heightPx; y++) {
+      final start = y * widthPx;
+      final end = start + widthPx;
+      paddedBytes.addAll(oneChannelBytes.sublist(start, end)); // línea original
+      if (missingPx > 0) paddedBytes.addAll(extra); // relleno al final
+    }
+
+    // Empaquetar bits en bytes
+    return _packBitsIntoBytes(paddedBytes);
   }
 
-  /// Merges each 8 values (bits) into one byte
   List<int> _packBitsIntoBytes(List<int> bytes) {
     const pxPerLine = 8;
-    final List<int> res = <int>[];
-    const threshold = 127; // set the greyscale -> b/w threshold here
-    for (int i = 0; i < bytes.length; i += pxPerLine) {
+    final List<int> res = [];
+    const threshold = 127;
+
+    // Procesar de a 8 píxeles por byte
+    for (int i = 0; i + pxPerLine <= bytes.length; i += pxPerLine) {
       int newVal = 0;
       for (int j = 0; j < pxPerLine; j++) {
         newVal = _transformUint32Bool(
@@ -214,14 +218,15 @@ class Generator {
       }
       res.add(newVal ~/ 2);
     }
+
     return res;
   }
 
-  /// Replaces a single bit in a 32-bit unsigned integer.
   int _transformUint32Bool(int uint32, int shift, bool newValue) {
     return ((0xFFFFFFFF ^ (0x1 << shift)) & uint32) |
         ((newValue ? 1 : 0) << shift);
   }
+
   // ************************ (end) Internal helpers  ************************
 
   //**************************** Public command generators ************************
